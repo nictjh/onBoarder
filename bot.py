@@ -6,6 +6,7 @@ from supabase import create_client, Client
 import random
 import sys 
 import re
+import requests
 
 
 # Creating a state to handle query
@@ -136,10 +137,37 @@ def unknown(update: Update, context: CallbackContext) -> None:
                 update.message.reply_text("An error occurred: {}".format(e))
                 print("An error occurred:", e)
         else:
-            update.message.reply_text("The text inputted did not match the format given, try again: ")
+            update.message.reply_text("The text inputted did not match the format given, try again: \n<Acronym>:<Long format>")
     else:
         update.message.reply_text(f"Sorry, '{update.message.text}' is not a recognized command or input.")
 
+
+def broadcast_tix(uniqueID): 
+    ## Not tested yet
+    print("Function call: broadcast_tix!!!")
+    try: 
+        data, count = supabase.table("pending").select("*").eq("uniqueID", uniqueID)
+    except Exception as e:
+        print("No data found, ", e)
+    ## Data found
+    detailFull = data[1][0]
+    chat_id = detailFull["user_id"] ## This to replace with admin chat_id
+    submittedWord = detailFull["submit"]
+    ## Formatting message
+    keyboard = [
+        [
+            InlineKeyboardButton("Add", callback_data="acceptWord"),
+            InlineKeyboardButton("Reject", callback_data="rejectWord")
+        ]
+    ]
+    message_text = "<b>Word Submission<b>\n\n" + submittedWord 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard_string = str(reply_markup).replace("'", '"') #Double apostrofy is needed for the url to work
+
+    url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage?" + "chat_id=" + chat_id + "&parse_mode=html" + "&text=" + message_text + "&reply_markup=" + keyboard_string
+    print(url)
+    request_returns = requests.get(url).json()
+    print(request_returns)
 
 
 ## Database related functions
@@ -262,6 +290,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("ticket", send_ticket))
     dispatcher.add_handler(CommandHandler('help', help))
     # dispatcher.add_handler(CommandHandler('dict', dict_command, pass_args=True))
+    
     dispatcher.add_handler(CallbackQueryHandler(button))
     dispatcher.add_handler(MessageHandler(Filters.text, unknown))
     # Start the Bot (Test DB connection first)

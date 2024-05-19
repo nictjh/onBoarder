@@ -26,3 +26,13 @@ What do I need in my pending table?
 - userName
 - user_id
 ** Can allow for duplicates
+
+
+*Send out message immediately after it enters pending to admin
+handle duplicates? 
+- Maybe I pop the first row ?
+- Map the broadcast call onto all my data points?
+
+broadcast_ticket() -> 
+1. Get my case details
+2. Send message to admin 
