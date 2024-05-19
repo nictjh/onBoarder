@@ -1,0 +1,28 @@
+For ticketing:
+
+2 Tables??: 
+1 for the normal input 
+
+This info from first table will send to pending
+then after I will keep check of pending and send to my main admin user to verify before putting it into my dictionary
+
+
+
+
+Current Databases:
+1. dictionary 
+2. tele-user
+3. pending
+
+
+The plan:
+- Can add a function to move words to from a specific table to another
+- Add a function to remove words from specific table
+- Add a delete row function
+
+
+What do I need in my pending table?
+- submittedText 
+- userName
+- user_id
+** Can allow for duplicates

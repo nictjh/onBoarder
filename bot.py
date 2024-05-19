@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import random
 import sys 
+import re
 
 
 # Creating a state to handle query
@@ -51,7 +52,7 @@ def button(update: Update, context: CallbackContext) -> None:
     userId = str(update.callback_query.from_user.id)
     userName = str(update.callback_query.from_user.username)
     query = update.callback_query
-    query.answer()
+    query.answer() ## All callback queries need to be answered
     if query.data == "wordCap":
         query.edit_message_text(
             text= "Please type the word you want the full form for: \nTo cancel word search type /cancel"
@@ -81,7 +82,7 @@ def receive_word(update: Update, context: CallbackContext) -> int:
         result = definition[0]
         short_value = result["short"]
         long_value = result["long"]
-        update.message.reply_text(f'{short_value.capitalize()}: {long_value}')
+        update.message.reply_text(f'{short_value.upper()}: {long_value}')
     else:
         update.message.reply_text(
             'Sorry, I do not have the full form for that word. Do submit a ticket to request adding it into our database'
@@ -109,33 +110,46 @@ def send_ticket(update: Update, context: CallbackContext) -> None:
 
 def unknown(update: Update, context: CallbackContext) -> None:
     userId = update.message.from_user.id
+    username = update.message.from_user.username
     userStatus = getUserStatus(userId)  # Retrieve the user's state from the database
+    # Check userStatus
     print("THE USER STATUS IS: ", userStatus)
+    
     if userStatus == "tixStart":
+        # Validate text given by users to ensure correct data input 
+        pattern = re.compile(r"^([^:]+):([^:]+)$")
         text = update.message.text
-        try:
-            # Assuming 'supabase' is properly configured and imported
-            data, count = supabase.table("tele-user").update({
-                "submit": text,
-                "status": "start"
-            }).eq("user_id", userId).execute()
-            update.message.reply_text("Successfully updated your submission.")
-        except Exception as e:
-            update.message.reply_text("An error occurred: {}".format(e))
-            print("An error occurred:", e)
+        text_check = pattern.match(text)
+        if text_check:
+            text = text.lower()
+            try:
+                # Assuming 'supabase' is properly configured and imported
+                data, count = supabase.table("tele-user").update({
+                    "submit": text,
+                    "status": "start"
+                }).eq("user_id", userId).execute()
+
+                update.message.reply_text("Successfully updated your submission.")
+                moveToPending(userId, username, text)
+
+            except Exception as e:
+                update.message.reply_text("An error occurred: {}".format(e))
+                print("An error occurred:", e)
+        else:
+            update.message.reply_text("The text inputted did not match the format given, try again: ")
     else:
         update.message.reply_text(f"Sorry, '{update.message.text}' is not a recognized command or input.")
 
 
 
 ## Database related functions
-def test_database_connection():
+def test_database_connection(table):
     try:
-        data = supabase.table("dictionary").select("*").execute()
+        data = supabase.table(table).select("*").execute()
         print(data)
         return True
     except Exception as e:
-        print("An error occured:", e)
+        print("Database connection failed:", e)
         return False
 
 
@@ -189,6 +203,7 @@ def updateUserstatus(status, userId):
     except Exception as e:
         print("An exception occured: ", e)
 
+
 def getUserStatus(userId):
     try: 
         data, count = supabase.table("tele-user").select("status").eq("user_id", userId).execute()
@@ -199,7 +214,28 @@ def getUserStatus(userId):
     except Exception as e:
         print("An exception occured: ", e)
 
+def deleteInfo(userId, table):
+    ## Delete row function 
+    try:
+        test_database_connection(table)
+        data, count = supabase.table(table).delete().eq("user_id", userId).execute()
+        print("Deleted row from: ", userId)
+    except Exception as e:
+        print("Failed to delete row: ", e)
 
+
+def moveToPending(user_id, userName, submit): 
+    try:
+        data, count = supabase.table("pending").insert({
+            "user_id" : user_id,
+            "userName" : userName,
+            "submit" : submit
+        }).execute()
+        print("Added: ", data)
+    except Exception as e:
+        print("Failed to move to pending, ", e)
+    # Delete row after 
+    deleteInfo(user_id, "tele-user")
 
 
 def main() -> None:
@@ -229,7 +265,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(button))
     dispatcher.add_handler(MessageHandler(Filters.text, unknown))
     # Start the Bot (Test DB connection first)
-    if test_database_connection():
+    if test_database_connection("dictionary"):
         print("Database connection success!, starting bot")
         updater.start_polling()
         updater.idle()
