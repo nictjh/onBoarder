@@ -26,7 +26,7 @@ def start(update: Update, context: CallbackContext) -> None:
     chatId = str(update.message.chat.id)
     chat_type = str(update.message.chat.type)
     print(userId,username,chatId)
-    save_User(userId, username, chatId)
+    save_User(userId, username, chatId, "start")
     if chat_type == "private":
 
         keyboard = [
@@ -59,6 +59,7 @@ def button(update: Update, context: CallbackContext) -> None:
             text= "Please type the word you want the full form for: \nTo cancel word search type /cancel"
         )
         print("Button pressed wordCapture!")
+        updateUserstatus("wordCap", userId) ## Update my database status
         return typing_State
     elif query.data == "tixStart":
         query.edit_message_text(text = (
@@ -67,13 +68,13 @@ def button(update: Update, context: CallbackContext) -> None:
         ))
         user_states[userId] = "tixStart"
         updateUserstatus("tixStart", userId)
-
     elif query.data == "tree":
         query.edit_message_text(text= "Testing")
         print("Button pressed learning is wanted!")
 
 
 def receive_word(update: Update, context: CallbackContext) -> int:
+    # userId = str(update.message.from_user.id)
     # Pre-process the word 
     word = update.message.text.lower()
     definition = check_word(word) # Returning response.data
@@ -97,9 +98,19 @@ def cancel(update: Update, context: CallbackContext) -> int:
     start(update, context)  # Restart by calling start
     return ConversationHandler.END
 
+def test_command(update: Update, context: CallbackContext) -> None:
+    print("##### Testing new command")
+    broadcast_tix(os.getenv("admin"))
 
 # Ticketing 
 def send_ticket(update: Update, context: CallbackContext) -> None:
+    ## I should do a user init here too
+    userId = str(update.message.from_user.id)
+    username = str(update.message.from_user.username)
+    chatId = str(update.message.chat.id)
+    chat_type = str(update.message.chat.type)
+    print(userId,username,chatId)
+    save_User(userId, username, chatId, "await")
     print("Starting ticket send")
     action = "tixStart"
     keyboard = [
@@ -117,6 +128,7 @@ def unknown(update: Update, context: CallbackContext) -> None:
     print("THE USER STATUS IS: ", userStatus)
     
     if userStatus == "tixStart":
+        # When enter "tixStart" state, handle in here:
         # Validate text given by users to ensure correct data input 
         pattern = re.compile(r"^([^:]+):([^:]+)$")
         text = update.message.text
@@ -132,6 +144,8 @@ def unknown(update: Update, context: CallbackContext) -> None:
 
                 update.message.reply_text("Successfully updated your submission.")
                 moveToPending(userId, username, text)
+                # I can broadcast once it move to pending...
+                # Broadcast by ID
 
             except Exception as e:
                 update.message.reply_text("An error occurred: {}".format(e))
@@ -142,32 +156,36 @@ def unknown(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(f"Sorry, '{update.message.text}' is not a recognized command or input.")
 
 
-def broadcast_tix(uniqueID): 
+def broadcast_tix(user_id): 
     ## Not tested yet
     print("Function call: broadcast_tix!!!")
     try: 
-        data, count = supabase.table("pending").select("*").eq("uniqueID", uniqueID)
-    except Exception as e:
-        print("No data found, ", e)
-    ## Data found
-    detailFull = data[1][0]
-    chat_id = detailFull["user_id"] ## This to replace with admin chat_id
-    submittedWord = detailFull["submit"]
-    ## Formatting message
-    keyboard = [
-        [
-            InlineKeyboardButton("Add", callback_data="acceptWord"),
-            InlineKeyboardButton("Reject", callback_data="rejectWord")
+        data, count = supabase.table("pending").select("*").eq("user_id", user_id).execute()
+        print(data)
+        detailFull = data[1][0]
+        print(detailFull)
+        #chat_id = detailFull["user_id"] 
+        chat_id = os.getenv("admin") #To send to admins
+        submittedWord = detailFull["submit"]
+        ## Formatting message
+        keyboard = [
+            [
+                InlineKeyboardButton("Add", callback_data="acceptWord"),
+                InlineKeyboardButton("Reject", callback_data="rejectWord")
+            ]
         ]
-    ]
-    message_text = "<b>Word Submission<b>\n\n" + submittedWord 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    keyboard_string = str(reply_markup).replace("'", '"') #Double apostrofy is needed for the url to work
+        message_text = "<b>Word Submission into database</b>\n\n" + submittedWord.upper() 
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard_string = str(reply_markup).replace("'", '"') #Double apostrofy is needed for the url to work
 
-    url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage?" + "chat_id=" + chat_id + "&parse_mode=html" + "&text=" + message_text + "&reply_markup=" + keyboard_string
-    print(url)
-    request_returns = requests.get(url).json()
-    print(request_returns)
+        url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage?" + "chat_id=" + chat_id + "&parse_mode=html" + "&text=" + message_text + "&reply_markup=" + keyboard_string
+        print(url)
+        request_returns = requests.get(url).json()
+        print(request_returns)
+        print("Sent message to admin")
+    except Exception as e:
+        ## Data not found, throw error
+        print("No data found, ", e)
 
 
 ## Database related functions
@@ -199,9 +217,12 @@ def check_User(userId):
         return False
 
 
-def save_User(userId, username, chatid):
+def save_User(userId, username, chatid, status):
     if check_User(userId):
-        pass
+        #pass
+        data, count = supabase.table("tele-user").update({
+            "status" : status
+        }).eq("user_id", userId).execute()
     else:
     # This assumes that user has not been added
         try:
@@ -214,7 +235,7 @@ def save_User(userId, username, chatid):
                 "user_id": userId,
                 "chat_id": chatid,
                 "userName": username,
-                "status": "start"
+                "status": status
             }).execute()
             print("Added: ", data)
             print("Table count: ", count)
@@ -262,7 +283,7 @@ def moveToPending(user_id, userName, submit):
         print("Added: ", data)
     except Exception as e:
         print("Failed to move to pending, ", e)
-    # Delete row after 
+    # Delete row entry in tele-user after moving to pending
     deleteInfo(user_id, "tele-user")
 
 
@@ -289,10 +310,11 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler("ticket", send_ticket))
     dispatcher.add_handler(CommandHandler('help', help))
+    dispatcher.add_handler(CommandHandler("test", test_command))
     # dispatcher.add_handler(CommandHandler('dict', dict_command, pass_args=True))
     
-    dispatcher.add_handler(CallbackQueryHandler(button))
-    dispatcher.add_handler(MessageHandler(Filters.text, unknown))
+    dispatcher.add_handler(CallbackQueryHandler(button)) # Handles Callback query buttons
+    dispatcher.add_handler(MessageHandler(Filters.text, unknown)) ## Handles random commands / Text 
     # Start the Bot (Test DB connection first)
     if test_database_connection("dictionary"):
         print("Database connection success!, starting bot")
