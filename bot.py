@@ -4,13 +4,13 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import random
-import sys 
+import sys
 import re
 import requests
 
 
 # Creating a state to handle query
-typing_State = 1 
+typing_State = 1
 user_states = {}
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -37,7 +37,7 @@ def start(update: Update, context: CallbackContext) -> None:
         ]
         update.message.reply_text("Hello! Welcome to CAG. Please write /help to see the commands available or navigate with the buttons below", 
                                 reply_markup=InlineKeyboardMarkup(keyboard))
-    else: 
+    else:
         print("User is trying to start commands in group chat, NO GO")
 
 def help(update: Update, context: CallbackContext) -> None:
@@ -75,10 +75,10 @@ def button(update: Update, context: CallbackContext) -> None:
 
 def receive_word(update: Update, context: CallbackContext) -> int:
     # userId = str(update.message.from_user.id)
-    # Pre-process the word 
+    # Pre-process the word
     word = update.message.text.lower()
     definition = check_word(word) # Returning response.data
-    
+
     if definition:
         #Take the first row
         result = definition[0]
@@ -100,9 +100,9 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 def test_command(update: Update, context: CallbackContext) -> None:
     print("##### Testing new command")
-    broadcast_tix(os.getenv("admin"))
+    broadcast_tix()
 
-# Ticketing 
+# Ticketing
 def send_ticket(update: Update, context: CallbackContext) -> None:
     ## I should do a user init here too
     userId = str(update.message.from_user.id)
@@ -126,10 +126,10 @@ def unknown(update: Update, context: CallbackContext) -> None:
     userStatus = getUserStatus(userId)  # Retrieve the user's state from the database
     # Check userStatus
     print("THE USER STATUS IS: ", userStatus)
-    
+
     if userStatus == "tixStart":
         # When enter "tixStart" state, handle in here:
-        # Validate text given by users to ensure correct data input 
+        # Validate text given by users to ensure correct data input
         pattern = re.compile(r"^([^:]+):([^:]+)$")
         text = update.message.text
         text_check = pattern.match(text)
@@ -156,25 +156,28 @@ def unknown(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(f"Sorry, '{update.message.text}' is not a recognized command or input.")
 
 
-def broadcast_tix(user_id): 
+def broadcast_tix():
     ## Not tested yet
     print("Function call: broadcast_tix!!!")
-    try: 
-        data, count = supabase.table("pending").select("*").eq("user_id", user_id).execute()
+    ## I should change the logic to just get the first submission, count to be updated constantly...
+    try:
+        data, count = supabase.table("pending").select("*").execute()
         print(data)
-        detailFull = data[1][0]
+        print(len(data[1])) ## This is the total number of things called
+        detailFull = data[1][0] ## This will ensure that the first row will always be called
         print(detailFull)
-        #chat_id = detailFull["user_id"] 
+        #chat_id = detailFull["user_id"]
         chat_id = os.getenv("admin") #To send to admins
-        submittedWord = detailFull["submit"]
+
         ## Formatting message
+        submittedWord = detailFull["submit"]
         keyboard = [
             [
                 InlineKeyboardButton("Add", callback_data="acceptWord"),
                 InlineKeyboardButton("Reject", callback_data="rejectWord")
             ]
         ]
-        message_text = "<b>Word Submission into database</b>\n\n" + submittedWord.upper() 
+        message_text = "<b>Word Submission into database</b>\n\n" + submittedWord.upper()
         reply_markup = InlineKeyboardMarkup(keyboard)
         keyboard_string = str(reply_markup).replace("'", '"') #Double apostrofy is needed for the url to work
 
@@ -199,8 +202,8 @@ def test_database_connection(table):
         return False
 
 
-def check_word(word): 
-    try: 
+def check_word(word):
+    try:
         print("Checking for {}".format(word))
         response = supabase.table("dictionary").select("short, long").eq("short", word).execute()
         print(response)
@@ -213,7 +216,7 @@ def check_User(userId):
     response = supabase.table("tele-user").select("*").eq("user_id", userId).execute()
     if response.data:
         return True
-    else: 
+    else:
         return False
 
 
@@ -244,7 +247,7 @@ def save_User(userId, username, chatid, status):
 
 
 def updateUserstatus(status, userId):
-    try: 
+    try:
         data, count = supabase.table("tele-user").update({
             "status" : status
         }).eq("user_id", userId).execute()
@@ -254,7 +257,7 @@ def updateUserstatus(status, userId):
 
 
 def getUserStatus(userId):
-    try: 
+    try:
         data, count = supabase.table("tele-user").select("status").eq("user_id", userId).execute()
         result = data[1][0]
         status = result["status"]
@@ -264,7 +267,7 @@ def getUserStatus(userId):
         print("An exception occured: ", e)
 
 def deleteInfo(userId, table):
-    ## Delete row function 
+    ## Delete row function
     try:
         test_database_connection(table)
         data, count = supabase.table(table).delete().eq("user_id", userId).execute()
@@ -273,7 +276,7 @@ def deleteInfo(userId, table):
         print("Failed to delete row: ", e)
 
 
-def moveToPending(user_id, userName, submit): 
+def moveToPending(user_id, userName, submit):
     try:
         data, count = supabase.table("pending").insert({
             "user_id" : user_id,
@@ -288,7 +291,7 @@ def moveToPending(user_id, userName, submit):
 
 
 def main() -> None:
-    
+
     updater = Updater(TOKEN, use_context=True)
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
@@ -298,23 +301,23 @@ def main() -> None:
         states={
             typing_State: [
                 MessageHandler(Filters.text & ~Filters.command, receive_word),
-                CommandHandler('cancel', cancel)  
+                CommandHandler('cancel', cancel)
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
 
 
-    # Routing 
+    # Routing
     dispatcher.add_handler(conv_handler)
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler("ticket", send_ticket))
     dispatcher.add_handler(CommandHandler('help', help))
     dispatcher.add_handler(CommandHandler("test", test_command))
     # dispatcher.add_handler(CommandHandler('dict', dict_command, pass_args=True))
-    
+
     dispatcher.add_handler(CallbackQueryHandler(button)) # Handles Callback query buttons
-    dispatcher.add_handler(MessageHandler(Filters.text, unknown)) ## Handles random commands / Text 
+    dispatcher.add_handler(MessageHandler(Filters.text, unknown)) ## Handles random commands / Text
     # Start the Bot (Test DB connection first)
     if test_database_connection("dictionary"):
         print("Database connection success!, starting bot")
