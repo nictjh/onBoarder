@@ -38,16 +38,16 @@ broadcast_ticket() ->
 2. Send message to admin (Done)
 
 
-When do i broadcast it? (To do)
-- update my button function to handle "acceptWord" and "rejectWord" (To do)
+When do i broadcast it? (Done)
+- update my button function to handle "acceptWord" and "rejectWord" (Done)
 
 - Need to check my data when i select id (data[1][0] will give me the first entry that is according to my id)
     - Maybe i can consider, just popping values off the pending table, send notif to admin to call the authorising message
 
 
-1. After ticket submission: send a normal message to admin containing the command for the authorisation message
-2. In my broadcast_ticket() function i should change it to pop out maybe 1-3 words to confirm
-3. Handle my acceptWord and rejectWord
+1. After ticket submission: send a normal message to admin containing the command for the authorisation message (Done)
+2. In my broadcast_ticket() function i should change it to pop out maybe 1-3 words to confirm (Done)
+3. Handle my acceptWord and rejectWord (Done)
 
 
 Bug:
@@ -57,11 +57,8 @@ Bug:
 
 
 Future plans:
-1. Look into reading excel file and pushing whole dataset up to db
+1. Look into reading excel file and pushing whole dataset up to db (Make it unique for superadmins to do so only!)
+    - Maybe through password
 
-
-Currently:
-1. the broadcasting works
-2. Next steps is to work on the buttons for broadcasting
-acceptWord &  rejectWord to work for buttons
-acceptWord is done!
+Moving forward:
+- Updating users on the status of their tickets
