@@ -12,6 +12,8 @@ import requests
 # Creating a state to handle query
 typing_State = 1
 user_states = {}
+submit_word = "" ## Global variable to store the word
+update_userID = "" ## Global variable to store the userid
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 url = os.getenv("SUPABASE_URL")
@@ -43,13 +45,14 @@ def start(update: Update, context: CallbackContext) -> None:
 def help(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(
         (
-            "These are the list of available functions at the moment\n" 
+            "These are the list of available functions at the moment\n"
             "/start : Bring you to the main menu page to access the main function of deciphering words\n"
             "/help :  Shows you available commands that can be performed\n"
         )
     )
 
 def button(update: Update, context: CallbackContext) -> None:
+    global submit_word
     userId = str(update.callback_query.from_user.id)
     userName = str(update.callback_query.from_user.username)
     query = update.callback_query
@@ -58,7 +61,7 @@ def button(update: Update, context: CallbackContext) -> None:
         query.edit_message_text(
             text= "Please type the word you want the full form for: \nTo cancel word search type /cancel"
         )
-        print("Button pressed wordCapture!")
+        print("################## Button pressed wordCapture!")
         updateUserstatus("wordCap", userId) ## Update my database status
         return typing_State
     elif query.data == "tixStart":
@@ -71,7 +74,31 @@ def button(update: Update, context: CallbackContext) -> None:
     elif query.data == "tree":
         query.edit_message_text(text= "Testing")
         print("Button pressed learning is wanted!")
-
+    elif query.data ==  "acceptWord":
+        print("############### Accepted word into database!")
+        addWord(submit_word)
+        query.edit_message_text("Word: {} is successfully added into the database!".format(submit_word.upper()))
+        submit_word = "" ## reset it back to null, after addition
+    elif query.data == "rejectWord":
+        print("############### rejecting word phase")
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes", callback_data="rejected"),
+                InlineKeyboardButton("Cancel", callback_data="cancelLast")
+            ]
+        ]
+        query.edit_message_text("Do you want to reject the word?", reply_markup= InlineKeyboardMarkup(keyboard))
+    elif query.data == "rejected":
+        ## this is working too
+        print("Word is rejected")
+        removeWord(submit_word, "pending")
+        ## call the send update to user
+        query.edit_message_text("{} ticket is successfully deleted!".format(submit_word))
+    elif query.data == "cancelLast":
+        query.edit_message_text((
+            "Action has been cancelled."
+            "Please do /start for the bot services or /help for more information on what the bot can do"
+        ))
 
 def receive_word(update: Update, context: CallbackContext) -> int:
     # userId = str(update.message.from_user.id)
@@ -84,11 +111,12 @@ def receive_word(update: Update, context: CallbackContext) -> int:
         result = definition[0]
         short_value = result["short"]
         long_value = result["long"]
-        update.message.reply_text(f'{short_value.upper()}: {long_value}')
+        update.message.reply_text(f'{short_value.upper()}: {long_value.capitalize()}')
     else:
-        update.message.reply_text(
-            'Sorry, I do not have the full form for that word. Do submit a ticket to request adding it into our database'
-        )
+        update.message.reply_text((
+            'Sorry, I do not have the full form for that word. Do submit a ticket to request adding it into our database.'
+            'Please type or press /ticket to do so.'
+        ))
 
     return typing_State
 
@@ -100,7 +128,10 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 def test_command(update: Update, context: CallbackContext) -> None:
     print("##### Testing new command")
-    broadcast_tix()
+    # broadcast_tix()
+    global submit_word
+    submit_word = broadcast_tix()
+    print(submit_word)
 
 # Ticketing
 def send_ticket(update: Update, context: CallbackContext) -> None:
@@ -153,11 +184,12 @@ def unknown(update: Update, context: CallbackContext) -> None:
         else:
             update.message.reply_text("The text inputted did not match the format given, try again: \n<Acronym>:<Long format>")
     else:
-        update.message.reply_text(f"Sorry, '{update.message.text}' is not a recognized command or input.")
+        update.message.reply_text(f"Sorry, '{update.message.text}' is not a recognized command or input. Please do /start or /help for more information.")
 
 
 def broadcast_tix():
-    ## Not tested yet
+    ## Working!
+    ## I need to save the user_id too for this so i can update the individual
     print("Function call: broadcast_tix!!!")
     ## I should change the logic to just get the first submission, count to be updated constantly...
     try:
@@ -186,12 +218,33 @@ def broadcast_tix():
         request_returns = requests.get(url).json()
         print(request_returns)
         print("Sent message to admin")
+        return submittedWord
     except Exception as e:
         ## Data not found, throw error
         print("No data found, ", e)
 
+def addWord(word):
+    ## Process the word
+    listOfWord =  word.split(":")
+    shortForm = listOfWord[0].lower()
+    longForm = listOfWord[1].lower()
+
+    # add into main dictionary table
+    try:
+        data, count = supabase.table('dictionary').insert({
+            'short': shortForm,
+            'long': longForm
+        }).execute()
+        print("Added new word into dictionary", data)
+    except Exception as e:
+        print(f"An exception occurred when adding into dictionary: {e}")
+
+    ## remove word in pending
+    removeWord(word, "pending")
+
 
 ## Database related functions
+
 def test_database_connection(table):
     try:
         data = supabase.table(table).select("*").execute()
@@ -203,16 +256,18 @@ def test_database_connection(table):
 
 
 def check_word(word):
+    ## Checks word in dictionary table
     try:
         print("Checking for {}".format(word))
         response = supabase.table("dictionary").select("short, long").eq("short", word).execute()
         print(response)
         return response.data
     except Exception as e:
-        print("An error occured: ", e)
+        print("Failed to find word in dictionary or failed to connect: ", e)
 
 
 def check_User(userId):
+    ## Checks users in tele-user table
     response = supabase.table("tele-user").select("*").eq("user_id", userId).execute()
     if response.data:
         return True
@@ -221,6 +276,8 @@ def check_User(userId):
 
 
 def save_User(userId, username, chatid, status):
+    ## saves user in  tele-user table
+    ## also updates status if user exits
     if check_User(userId):
         #pass
         data, count = supabase.table("tele-user").update({
@@ -243,17 +300,18 @@ def save_User(userId, username, chatid, status):
             print("Added: ", data)
             print("Table count: ", count)
         except Exception as e:
-            print(f"An exception occurred: {e}")
+            print(f"An exception occurred, failed to save info into database: {e}")
 
 
 def updateUserstatus(status, userId):
+    ## second function to update user status
     try:
         data, count = supabase.table("tele-user").update({
             "status" : status
         }).eq("user_id", userId).execute()
         print("Successfully updated: ", data)
     except Exception as e:
-        print("An exception occured: ", e)
+        print("An exception occured, failed to update userStatus: ", e)
 
 
 def getUserStatus(userId):
@@ -264,10 +322,10 @@ def getUserStatus(userId):
         print(status)
         return status
     except Exception as e:
-        print("An exception occured: ", e)
+        print("An exception occured, failed to get userStatus: ", e)
 
 def deleteInfo(userId, table):
-    ## Delete row function
+    ## Delete row function for userid
     try:
         test_database_connection(table)
         data, count = supabase.table(table).delete().eq("user_id", userId).execute()
@@ -288,6 +346,22 @@ def moveToPending(user_id, userName, submit):
         print("Failed to move to pending, ", e)
     # Delete row entry in tele-user after moving to pending
     deleteInfo(user_id, "tele-user")
+
+def removeWord(word, table):
+    ## Removing word function from a table
+    if (table == "pending"):
+        try:
+            data, count = supabase.table(table).delete().eq('submit', word).execute()
+            print("Deleted row from pending table: ", data)
+        except Exception as e:
+            print("Failed to delete row: ", e)
+    else:
+        ## if table is dictionary.delete by short
+        try:
+            data, count = supabase.table(table).delete().eq('short', word).execute()
+            print("Deleted row from pending table: ", data)
+        except Exception as e:
+            print("Failed to delete row: ", e)
 
 
 def main() -> None:
