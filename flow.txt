@@ -16,9 +16,9 @@ Current Databases:
 
 
 The plan:
-- Can add a function to move words to from a specific table to another
-- Add a function to remove words from specific table
-- Add a delete row function
+- Can add a function to move words to from a specific table to another (Done)
+- Add a function to remove words from specific table (Done)
+- Add a delete row function (Done)
 
 
 What do I need in my pending table?
@@ -29,8 +29,8 @@ What do I need in my pending table?
 
 
 * Send out message immediately after it enters pending to admin
-handle duplicates?
-- Maybe I pop the first row ?
+handle duplicates? (Possible direction to look at..., so everytime there is a addition i will send a notif to admin)
+- Maybe I pop the first row ? (Proceeded with this method)
 - Map the broadcast call onto all my data points?
 
 broadcast_ticket() ->
@@ -50,7 +50,7 @@ When do i broadcast it? (Done)
 3. Handle my acceptWord and rejectWord (Done)
 
 
-Bug:
+Possible improvements (Lazy do)
 1. Updating of states (Halfway, can try to remove typing_state and use the db state instead?)
     - Add in searching into unknown which will call
 
@@ -60,5 +60,10 @@ Future plans:
 1. Look into reading excel file and pushing whole dataset up to db (Make it unique for superadmins to do so only!)
     - Maybe through password
 
-Moving forward:
-- Updating users on the status of their tickets
+
+- Updating users on the status of their tickets (Done)
+- I have to make check a admin call only (for future implementation)
+
+
+One bug spotted:
+- Need to handle the duplication of short forms in the table itself

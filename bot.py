@@ -12,7 +12,7 @@ import requests
 # Creating a state to handle query
 typing_State = 1
 user_states = {}
-submit_word = "" ## Global variable to store the word
+submit_word = [] ## Global variable to store the word
 update_userID = "" ## Global variable to store the userid
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -76,9 +76,10 @@ def button(update: Update, context: CallbackContext) -> None:
         print("Button pressed learning is wanted!")
     elif query.data ==  "acceptWord":
         print("############### Accepted word into database!")
-        addWord(submit_word)
-        query.edit_message_text("Word: {} is successfully added into the database!".format(submit_word.upper()))
-        submit_word = "" ## reset it back to null, after addition
+        addWord(submit_word["submit"])
+        updateTicket(True)
+        query.edit_message_text("Word: {} is successfully added into the database!".format(submit_word["submit"].upper()))
+        submit_word = [] ## reset it back to null, after addition
     elif query.data == "rejectWord":
         print("############### rejecting word phase")
         keyboard = [
@@ -91,13 +92,13 @@ def button(update: Update, context: CallbackContext) -> None:
     elif query.data == "rejected":
         ## this is working too
         print("Word is rejected")
-        removeWord(submit_word, "pending")
-        ## call the send update to user
-        query.edit_message_text("{} ticket is successfully deleted!".format(submit_word))
+        removeWord(submit_word["submit"], "pending")
+        updateTicket(False)
+        query.edit_message_text("{} ticket is successfully deleted!".format(submit_word["submit"]))
     elif query.data == "cancelLast":
         query.edit_message_text((
             "Action has been cancelled."
-            "Please do /start for the bot services or /help for more information on what the bot can do"
+            "Please do /start for the chatbot services or /help for more information on what the bot can do"
         ))
 
 def receive_word(update: Update, context: CallbackContext) -> int:
@@ -122,16 +123,19 @@ def receive_word(update: Update, context: CallbackContext) -> int:
 
 def cancel(update: Update, context: CallbackContext) -> int:
     print("running Cancel now")
-    update.message.reply_text("Dictionary search cancelled. Restarting...")
-    start(update, context)  # Restart by calling start
+    update.message.reply_text("Dictionary search cancelled. Thank you for using it!. \n/start to access the main function and /help for more information")
+    ## start(update, context)  # Maybe i shouldnt restart the start as it will reload the state in the db
     return ConversationHandler.END
+
+def approveFirst(update: Update, context: CallbackContext) -> None:
+    print("##### Approving first word in pending database")
+    # broadcast_tix()
+    global submit_word
+    submit_word = broadcast_tix() ##double check this returns a list
+    print(submit_word["submit"])
 
 def test_command(update: Update, context: CallbackContext) -> None:
     print("##### Testing new command")
-    # broadcast_tix()
-    global submit_word
-    submit_word = broadcast_tix()
-    print(submit_word)
 
 # Ticketing
 def send_ticket(update: Update, context: CallbackContext) -> None:
@@ -167,20 +171,19 @@ def unknown(update: Update, context: CallbackContext) -> None:
         if text_check:
             text = text.lower()
             try:
-                # Assuming 'supabase' is properly configured and imported
                 data, count = supabase.table("tele-user").update({
                     "submit": text,
                     "status": "start"
                 }).eq("user_id", userId).execute()
 
-                update.message.reply_text("Successfully updated your submission.")
+                update.message.reply_text("Successfully updated your submission.\nThank you for your contributions!")
                 moveToPending(userId, username, text)
                 # I can broadcast once it move to pending...
                 # Broadcast by ID
 
             except Exception as e:
                 update.message.reply_text("An error occurred: {}".format(e))
-                print("An error occurred:", e)
+                print("An error occurred: Failed to add word into pending!!!", e)
         else:
             update.message.reply_text("The text inputted did not match the format given, try again: \n<Acronym>:<Long format>")
     else:
@@ -197,8 +200,7 @@ def broadcast_tix():
         print(data)
         print(len(data[1])) ## This is the total number of things called
         detailFull = data[1][0] ## This will ensure that the first row will always be called
-        print(detailFull)
-        #chat_id = detailFull["user_id"]
+        print(detailFull) ## This is a list, which i should return instead so i can access all the values
         chat_id = os.getenv("admin") #To send to admins
 
         ## Formatting message
@@ -218,7 +220,7 @@ def broadcast_tix():
         request_returns = requests.get(url).json()
         print(request_returns)
         print("Sent message to admin")
-        return submittedWord
+        return detailFull ## used to be submittedWord
     except Exception as e:
         ## Data not found, throw error
         print("No data found, ", e)
@@ -241,6 +243,22 @@ def addWord(word):
 
     ## remove word in pending
     removeWord(word, "pending")
+
+def updateTicket(flag):
+    global submit_word ##declare to use the global variable
+    ## Retrieve the user_id
+    user_id = submit_word["user_id"]
+    ticket = submit_word["submit"]
+    if (flag):
+        message_text = "Your submission of {} has been successfully reviewed and accepted in the database".format(ticket.upper())
+    else:
+        message_text = "Your submission of {} has been successfully reviewed but rejected. For more information, please find @nictjh".format(ticket.upper())
+
+    url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage?" + "chat_id=" + user_id + "&parse_mode=html" + "&text=" + message_text
+    print(url)
+    request_returns = requests.get(url).json()
+    print(request_returns)
+    print("update message has been sent out to specific users")
 
 
 ## Database related functions
@@ -387,7 +405,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler("ticket", send_ticket))
     dispatcher.add_handler(CommandHandler('help', help))
-    dispatcher.add_handler(CommandHandler("test", test_command))
+    dispatcher.add_handler(CommandHandler("check", approveFirst))
     # dispatcher.add_handler(CommandHandler('dict', dict_command, pass_args=True))
 
     dispatcher.add_handler(CallbackQueryHandler(button)) # Handles Callback query buttons
