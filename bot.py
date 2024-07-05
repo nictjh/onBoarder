@@ -7,6 +7,8 @@ import random
 import sys
 import re
 import requests
+import openai
+import numpy as np
 
 
 # Creating a state to handle query
@@ -14,12 +16,15 @@ typing_State = 1
 user_states = {}
 submit_word = [] ## Global variable to store the word
 update_userID = "" ## Global variable to store the userid
-load_dotenv()
+load_dotenv(override=True)
 TOKEN = os.getenv("TOKEN")
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 # Establishing supabase client
 supabase = create_client(url, key)
+OPEN_AI_TOKEN = os.getenv("OPEN_AI_CAG")
+openai.api_key = OPEN_AI_TOKEN
+query_state = 2
 
 def start(update: Update, context: CallbackContext) -> None:
     print("*****Start is called*****")
@@ -134,8 +139,21 @@ def approveFirst(update: Update, context: CallbackContext) -> None:
     submit_word = broadcast_tix() ##double check this returns a list
     print(submit_word["submit"])
 
-def test_command(update: Update, context: CallbackContext) -> None:
-    print("##### Testing new command")
+def test_command(update: Update, context: CallbackContext) -> int:
+    print("##### Testing new command querying gpt")
+    update.message.reply_text("Please enter your query: ")
+    return query_state
+
+def receive_query(update: Update, context: CallbackContext) -> int:
+    user_query = update.message.text
+    ## Supposed to handle the query here and return info
+    embedded_query = get_query_embeddings(user_query)
+    relevantEntry = find_most_relevant_query(embedded_query)
+    print(relevantEntry['id']) ## returns me my tuple! so i jus call retrieve by id
+    airReply = generate_response_def_with_openai(relevantEntry['id'], user_query)
+    print(airReply)
+    update.message.reply_text(airReply)
+    return ConversationHandler.END
 
 # Ticketing
 def send_ticket(update: Update, context: CallbackContext) -> None:
@@ -382,6 +400,79 @@ def removeWord(word, table):
             print("Failed to delete row: ", e)
 
 
+### OpenAI Integrations
+
+def get_query_embeddings(text, model="text-embedding-ada-002"):
+    response = openai.embeddings.create(
+        input = text,
+        model = model
+    )
+    return response.data[0].embedding
+
+def cosine_similarity(a, b):
+    """Comparator function to find closest similarity"""
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+def find_most_relevant_query(embedded_query):
+    data = supabase.table('trialTable').select("id", "embedding").execute()
+    max_similarity = -1 ## Starting params
+    most_relevant_query = None ## Starting params
+    for entry in data.data:
+        stored = np.array(list(map(float, entry['embedding'].split(','))))
+        similarity = cosine_similarity(embedded_query, stored)
+        if similarity > max_similarity:
+            max_similarity = similarity
+            most_relevant_query = entry
+    return most_relevant_query
+
+def generate_response_def_with_openai(entry, user_query):
+
+    ## Get my data first!
+    data = supabase.table('trialTable').select('*').eq('id', entry).execute()
+    item = data.data[0]
+    context = f"""
+        Definition: {item['definition']}
+        Explanation: {item['explanation']}
+        Additional resources: {item['additional_resources']}
+    """
+    system_message = {
+        "role": "system",
+        "content": """
+            You are a knowledgeable chatbot assistant.
+            Answwr strictly with only the context provided above.
+            Do not invent answers when none is available; Respond with 'I am not trained to answer that qeustion'.
+            Respond naturally using the provided definitions, explanations and additional_resources.
+            Use examples where relevant and available.
+            Recognize synonyms as the term they represent.
+            Always clarify ambigious or incomplete queries
+        """
+    }
+
+    try:
+        completion = openai.chat.completions.create(
+            model = "gpt-4-0125-preview",
+            messages = [
+                system_message,
+                {
+                    "role": "user",
+                    "content": f"{user_query}"
+                },
+                {
+                    "role": "system",
+                    "content": context
+                }
+            ],
+            temperature=1,
+            top_p = 1,
+            max_tokens=512,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(e)
+        return "Error generating response!"
+
 def main() -> None:
 
     updater = Updater(TOKEN, use_context=True)
@@ -399,9 +490,23 @@ def main() -> None:
         fallbacks=[CommandHandler('cancel', cancel)]
     )
 
+    conv_handler_2 = ConversationHandler(
+        entry_points=[CommandHandler('test', test_command)],
+        states={
+            query_state: [
+                MessageHandler(Filters.text & ~Filters.command, receive_query),
+                CommandHandler('cancel', cancel)
+            ]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
 
-    # Routing
+
+    ### Routing
+
+
     dispatcher.add_handler(conv_handler)
+    dispatcher.add_handler(conv_handler_2)
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler("ticket", send_ticket))
     dispatcher.add_handler(CommandHandler('help', help))
