@@ -8,7 +8,6 @@ import openai
 load_dotenv(override=True)
 OPEN_AI_TOKEN = os.getenv("OPEN_AI_CAG")
 openai.api_key = OPEN_AI_TOKEN
-print(OPEN_AI_TOKEN) ## check
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase = create_client(url, key)
@@ -16,7 +15,7 @@ supabase = create_client(url, key)
 ## Retrieve all my data from supabase
 async def fetch_data():
   print("##### Fetching data from supabase")
-  response = supabase.table("trialTable").select('*').execute()
+  response = supabase.table("dictionary").select('*').execute()
   return response.data ## Returns me a list of the objects
 
 def get_embeddings(texts, model="text-embedding-ada-002"):
@@ -27,7 +26,7 @@ def get_embeddings(texts, model="text-embedding-ada-002"):
     return response.data[0].embedding
 
 async def save_embeddings(id, embeddings):
-  response = supabase.table("trialTable").update(
+  response = supabase.table("dictionary").update(
       {'embedding': embeddings}
   ).eq('id',id).execute()
   print(response)
@@ -44,7 +43,7 @@ async def main():
   if dictionaryData:
     for obj in dictionaryData:
       textNid = combine_fields(obj) ## returns me a tuple
-      embeddings = get_embeddings(textNid[1]) ## access the combinedText and return me a list of embeddings
+      embeddings = get_embeddings(textNid[1]) ## access the combinedText and returns me a LIST of embeddings
       embedding_str = ','.join(map(str, embeddings)) ## converts this to string to store into db
       await save_embeddings(textNid[0], embedding_str)
 
