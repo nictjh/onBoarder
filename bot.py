@@ -16,7 +16,7 @@ typing_State = 1
 user_states = {}
 submit_word = [] ## Global variable to store the word
 update_userID = "" ## Global variable to store the userid
-load_dotenv(override=True)
+load_dotenv(override=True) ## Reloads my environment variables
 TOKEN = os.getenv("TOKEN")
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
@@ -24,7 +24,7 @@ key = os.getenv("SUPABASE_KEY")
 supabase = create_client(url, key)
 OPEN_AI_TOKEN = os.getenv("OPEN_AI_CAG")
 openai.api_key = OPEN_AI_TOKEN
-query_state = 2
+query_state = 2 ## This for the openai chat
 
 def start(update: Update, context: CallbackContext) -> None:
     print("*****Start is called*****")
@@ -38,11 +38,11 @@ def start(update: Update, context: CallbackContext) -> None:
 
         keyboard = [
             [
-                InlineKeyboardButton("Decipher a word", callback_data="wordCap"),
+                # InlineKeyboardButton("Decipher a word", callback_data="wordCap"),
                 InlineKeyboardButton("Familiarising urself", callback_data="tree")
             ]
         ]
-        update.message.reply_text("Hello! Welcome to CAG. Please write /help to see the commands available or navigate with the buttons below", 
+        update.message.reply_text("Hello! Welcome to CAG. Please write /help to see the commands available or navigate with the buttons below",
                                 reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         print("User is trying to start commands in group chat, NO GO")
@@ -53,6 +53,8 @@ def help(update: Update, context: CallbackContext) -> None:
             "These are the list of available functions at the moment\n"
             "/start : Bring you to the main menu page to access the main function of deciphering words\n"
             "/help :  Shows you available commands that can be performed\n"
+            "\nFor Admins: "
+            "/check : Allows you to view latest submitted words and add/reject into database\n"
         )
     )
 
@@ -95,7 +97,6 @@ def button(update: Update, context: CallbackContext) -> None:
         ]
         query.edit_message_text("Do you want to reject the word?", reply_markup= InlineKeyboardMarkup(keyboard))
     elif query.data == "rejected":
-        ## this is working too
         print("Word is rejected")
         removeWord(submit_word["submit"], "pending")
         updateTicket(False)
@@ -115,20 +116,21 @@ def receive_word(update: Update, context: CallbackContext) -> int:
     if definition:
         #Take the first row
         result = definition[0]
-        short_value = result["short"]
-        long_value = result["long"]
-        update.message.reply_text(f'{short_value.upper()}: {long_value.capitalize()}')
+        short_value = result["term"]
+        long_value = result["definition"]
+        update.message.reply_text(f'{short_value.upper()}: {long_value.capitalize()}\n\nFor a more detailed explanation please try using /test')
     else:
         update.message.reply_text((
             'Sorry, I do not have the full form for that word. Do submit a ticket to request adding it into our database.'
             'Please type or press /ticket to do so.'
+            '\n\nTo exit this dictionary search, type /cancel'
         ))
 
     return typing_State
 
 def cancel(update: Update, context: CallbackContext) -> int:
     print("running Cancel now")
-    update.message.reply_text("Dictionary search cancelled. Thank you for using it!. \n/start to access the main function and /help for more information")
+    update.message.reply_text("Previous mode is cancelled. Thank you for using it!. \n\n/start to access the main function and /help for more information")
     ## start(update, context)  # Maybe i shouldnt restart the start as it will reload the state in the db
     return ConversationHandler.END
 
@@ -141,7 +143,7 @@ def approveFirst(update: Update, context: CallbackContext) -> None:
 
 def test_command(update: Update, context: CallbackContext) -> int:
     print("##### Testing new command querying gpt")
-    update.message.reply_text("Please enter your query: ")
+    update.message.reply_text("Hi Onboarder here! How can I help you today? \n\n\n/cancel to exit the chatbot!")
     return query_state
 
 def receive_query(update: Update, context: CallbackContext) -> int:
@@ -149,11 +151,12 @@ def receive_query(update: Update, context: CallbackContext) -> int:
     ## Supposed to handle the query here and return info
     embedded_query = get_query_embeddings(user_query)
     relevantEntry = find_most_relevant_query(embedded_query)
-    print(relevantEntry['id']) ## returns me my tuple! so i jus call retrieve by id
+    print("My most relevant entry!", relevantEntry['id']) ## returns me my tuple! so i jus call retrieve by id
     airReply = generate_response_def_with_openai(relevantEntry['id'], user_query)
     print(airReply)
     update.message.reply_text(airReply)
-    return ConversationHandler.END
+    ## Comment this to allow unlimited queries
+    # return ConversationHandler.END
 
 # Ticketing
 def send_ticket(update: Update, context: CallbackContext) -> None:
@@ -252,8 +255,8 @@ def addWord(word):
     # add into main dictionary table
     try:
         data, count = supabase.table('dictionary').insert({
-            'short': shortForm,
-            'long': longForm
+            'term': shortForm,
+            'definition': longForm
         }).execute()
         print("Added new word into dictionary", data)
     except Exception as e:
@@ -295,7 +298,7 @@ def check_word(word):
     ## Checks word in dictionary table
     try:
         print("Checking for {}".format(word))
-        response = supabase.table("dictionary").select("short, long").eq("short", word).execute()
+        response = supabase.table("dictionary").select("term, definition").eq("term", word).execute()
         print(response)
         return response.data
     except Exception as e:
@@ -392,9 +395,10 @@ def removeWord(word, table):
         except Exception as e:
             print("Failed to delete row: ", e)
     else:
-        ## if table is dictionary.delete by short
+        ### Under the assumption that table getting deleted is dictionary
+        ## if table is dictionary.delete by term
         try:
-            data, count = supabase.table(table).delete().eq('short', word).execute()
+            data, count = supabase.table(table).delete().eq('term', word).execute()
             print("Deleted row from pending table: ", data)
         except Exception as e:
             print("Failed to delete row: ", e)
@@ -414,7 +418,7 @@ def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 def find_most_relevant_query(embedded_query):
-    data = supabase.table('trialTable').select("id", "embedding").execute()
+    data = supabase.table('dictionary').select("id", "embedding").execute()
     max_similarity = -1 ## Starting params
     most_relevant_query = None ## Starting params
     for entry in data.data:
@@ -428,7 +432,8 @@ def find_most_relevant_query(embedded_query):
 def generate_response_def_with_openai(entry, user_query):
 
     ## Get my data first!
-    data = supabase.table('trialTable').select('*').eq('id', entry).execute()
+    data = supabase.table('dictionary').select('*').eq('id', entry).execute()
+    print("This is the data to be returned to gpt", data)
     item = data.data[0]
     context = f"""
         Definition: {item['definition']}
@@ -439,12 +444,14 @@ def generate_response_def_with_openai(entry, user_query):
         "role": "system",
         "content": """
             You are a knowledgeable chatbot assistant.
-            Answwr strictly with only the context provided above.
+            Answer strictly with only the context provided above.
+            If explanation is not available, provide the most appropriate and notify that it may not be accurate.
             Do not invent answers when none is available; Respond with 'I am not trained to answer that qeustion'.
             Respond naturally using the provided definitions, explanations and additional_resources.
             Use examples where relevant and available.
             Recognize synonyms as the term they represent.
-            Always clarify ambigious or incomplete queries
+            Always clarify ambigious or incomplete queries.
+            End the response with "/cancel to stop chatting with me, have a nice day!".
         """
     }
 
@@ -491,7 +498,7 @@ def main() -> None:
     )
 
     conv_handler_2 = ConversationHandler(
-        entry_points=[CommandHandler('test', test_command)],
+        entry_points=[CommandHandler('chat', test_command)],
         states={
             query_state: [
                 MessageHandler(Filters.text & ~Filters.command, receive_query),
