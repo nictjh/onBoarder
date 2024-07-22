@@ -38,8 +38,8 @@ def start(update: Update, context: CallbackContext) -> None:
 
         keyboard = [
             [
-                # InlineKeyboardButton("Decipher a word", callback_data="wordCap"),
-                InlineKeyboardButton("Familiarising urself", callback_data="tree")
+                InlineKeyboardButton("Decipher a word", callback_data="wordCap"),
+                # InlineKeyboardButton("Familiarising urself", callback_data="tree")
             ]
         ]
         update.message.reply_text("Hello! Welcome to CAG. Please write /help to see the commands available or navigate with the buttons below",
