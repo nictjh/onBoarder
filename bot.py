@@ -53,6 +53,7 @@ def help(update: Update, context: CallbackContext) -> None:
             "These are the list of available functions at the moment\n"
             "/start : Bring you to the main menu page to access the main function of deciphering words\n"
             "/help :  Shows you available commands that can be performed\n"
+            "/ticket : Submits a acronym request to add into database.\n"
             "\nFor Admins: "
             "/check : Allows you to view latest submitted words and add/reject into database\n"
         )
@@ -118,7 +119,12 @@ def receive_word(update: Update, context: CallbackContext) -> int:
         result = definition[0]
         short_value = result["term"]
         long_value = result["definition"]
-        update.message.reply_text(f'{short_value.upper()}: {long_value.capitalize()}\n\nFor a more detailed explanation please try using /test')
+        if result["explanation"]:
+            explanation = result["explanation"]
+            update.message.reply_text(f'{short_value.upper()} stands for {long_value.capitalize()}\n\nQuick explanation of {short_value.upper()}:\n{explanation}')
+        else:
+            update.message.reply_text(f'{short_value.upper()} stands for {long_value.capitalize()}\n\nFor a more detailed explanation please try using /chat to chat with smartie onBoarder!')
+
     else:
         update.message.reply_text((
             'Sorry, I do not have the full form for that word. Do submit a ticket to request adding it into our database.'
@@ -298,7 +304,7 @@ def check_word(word):
     ## Checks word in dictionary table
     try:
         print("Checking for {}".format(word))
-        response = supabase.table("dictionary").select("term, definition").eq("term", word).execute()
+        response = supabase.table("dictionary").select("*").eq("term", word).execute()
         print(response)
         return response.data
     except Exception as e:
