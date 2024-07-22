@@ -23,8 +23,10 @@ Once the application is running, users can interact with `onBoarder` via telegra
     onBoarder: Please type the word you want the full form for:
     To cancel word search type /cancel
 
-    User: ATOT
-    onBoarder: ATOT: Actual take off time
+    User: ATC
+    onBoarder: ATC stands for Air Traffic Control
+    Quick explanation for ATC:
+    A service operated by appropriate authority (the FAA) to promote the safe, orderly, and expeditious flow of air traffic.
 ```
 
 - Term explanation:
