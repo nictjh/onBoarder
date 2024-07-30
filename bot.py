@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext, ConversationHandler, Filters, MessageHandler
 import os
 from dotenv import load_dotenv
@@ -12,6 +12,7 @@ import numpy as np
 
 
 # Creating a state to handle query
+default_state = 0
 typing_State = 1
 user_states = {}
 submit_word = [] ## Global variable to store the word
@@ -36,24 +37,40 @@ def start(update: Update, context: CallbackContext) -> None:
     save_User(userId, username, chatId, "start")
     if chat_type == "private":
 
+        ## Inline Keyboard markup
+        # keyboard = [
+        #     [
+        #         InlineKeyboardButton("Decipher a word", callback_data="wordCap"),
+        #         # InlineKeyboardButton("Familiarising urself", callback_data="tree")
+        #     ]
+        # ]
+        # update.message.reply_text("Hello! Welcome to CAG. Please write /help to see the commands available or navigate with the buttons below",
+        #                         reply_markup=InlineKeyboardMarkup(keyboard))
+
+        ## Keyboard Markup integration
         keyboard = [
-            [
-                InlineKeyboardButton("Decipher a word", callback_data="wordCap"),
-                # InlineKeyboardButton("Familiarising urself", callback_data="tree")
-            ]
+            [KeyboardButton('Decipher a word'), KeyboardButton('Chat')]
         ]
-        update.message.reply_text("Hello! Welcome to CAG. Please write /help to see the commands available or navigate with the buttons below",
-                                reply_markup=InlineKeyboardMarkup(keyboard))
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        update.message.reply_text(
+            "Hello! Welcome to CAG. Please navigate with the buttons below or type /help to see the commands available",
+            reply_markup=reply_markup
+        )
+
     else:
         print("User is trying to start commands in group chat, NO GO")
+
+    return default_state
 
 def help(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(
         (
             "These are the list of available functions at the moment\n"
-            "/start : Bring you to the main menu page to access the main function of deciphering words\n"
+            "/start : Bring you to the main menu page to access the main functionalities of the bot.\n"
+            "\n    'Decipher a word': Gives a quick definition and explanation if available."
+            "\n    'Chat': Chat with our Onboarder chatbot to clarify and understand terms better.\n"
+            "\n/ticket : Submits a acronym request to add into database.\n"
             "/help :  Shows you available commands that can be performed\n"
-            "/ticket : Submits a acronym request to add into database.\n"
             "\nFor Admins: "
             "/check : Allows you to view latest submitted words and add/reject into database\n"
         )
@@ -108,6 +125,27 @@ def button(update: Update, context: CallbackContext) -> None:
             "Please do /start for the chatbot services or /help for more information on what the bot can do"
         ))
 
+
+def button_handler(update: Update, context: CallbackContext) -> int:
+    text = update.message.text
+    if text == "Decipher a word":
+        keyboard = [
+            [KeyboardButton('/cancel')]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        update.message.reply_text(
+            'Please type the word you want the full form for: \nTo cancel word search click on /cancel or type /cancel',
+            reply_markup=reply_markup
+        )
+        return typing_State
+    elif text == "Chat":
+        keyboard = [
+            [KeyboardButton('/cancel')]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        update.message.reply_text("Hi Onboarder here! How can I help you today? \n\n\n/cancel to exit the chatbot!", reply_markup=reply_markup)
+        return query_state
+
 def receive_word(update: Update, context: CallbackContext) -> int:
     # userId = str(update.message.from_user.id)
     # Pre-process the word
@@ -137,7 +175,7 @@ def receive_word(update: Update, context: CallbackContext) -> int:
 def cancel(update: Update, context: CallbackContext) -> int:
     print("running Cancel now")
     update.message.reply_text("Previous mode is cancelled. Thank you for using it!. \n\n/start to access the main function and /help for more information")
-    ## start(update, context)  # Maybe i shouldnt restart the start as it will reload the state in the db
+    # start(update, context)  # Maybe i shouldnt restart the start as it will reload the state in the db
     return ConversationHandler.END
 
 def approveFirst(update: Update, context: CallbackContext) -> None:
@@ -147,12 +185,17 @@ def approveFirst(update: Update, context: CallbackContext) -> None:
     submit_word = broadcast_tix() ##double check this returns a list
     print(submit_word["submit"])
 
-def test_command(update: Update, context: CallbackContext) -> int:
-    print("##### Testing new command querying gpt")
-    update.message.reply_text("Hi Onboarder here! How can I help you today? \n\n\n/cancel to exit the chatbot!")
-    return query_state
+# def test_command(update: Update, context: CallbackContext) -> int:
+#     print("##### Testing new command querying gpt")
+#     keyboard = [
+#             [KeyboardButton('/cancel')]
+#         ]
+#     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+#     update.message.reply_text("Hi Onboarder here! How can I help you today? \n\n\n/cancel to exit the chatbot!", reply_markup=reply_markup)
+#     return query_state
 
 def receive_query(update: Update, context: CallbackContext) -> int:
+    print("########Entering receive query state########")
     user_query = update.message.text
     ## Supposed to handle the query here and return info
     embedded_query = get_query_embeddings(user_query)
@@ -492,34 +535,47 @@ def main() -> None:
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
 
+    ## Original for callback_data handling
+    # conv_handler = ConversationHandler(
+    #     entry_points=[CallbackQueryHandler(button, pattern='^' + "wordCap" + '$')],
+    #     states={
+    #         typing_State: [
+    #             MessageHandler(Filters.text & ~Filters.command, receive_word),
+    #             CommandHandler('cancel', cancel)
+    #         ],
+    #     },
+    #     fallbacks=[CommandHandler('cancel', cancel)]
+    # )
+
+    # conv_handler_2 = ConversationHandler(
+    #     entry_points=[CommandHandler('chat', test_command)],
+    #     states={
+    #         query_state: [
+    #             MessageHandler(Filters.text & ~Filters.command, receive_query),
+    #             CommandHandler('cancel', cancel)
+    #         ]
+    #     },
+    #     fallbacks=[CommandHandler('cancel', cancel)],
+    # )
+
+    ## For ReplyKeyboard
     conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(button, pattern='^' + "wordCap" + '$')],
+        entry_points=[CommandHandler('start', start)],
         states={
-            typing_State: [
-                MessageHandler(Filters.text & ~Filters.command, receive_word),
-                CommandHandler('cancel', cancel)
-            ],
+            default_state: [MessageHandler(Filters.text & ~Filters.command, button_handler)],
+            typing_State: [MessageHandler(Filters.text & ~Filters.command, receive_word)],
+            query_state: [MessageHandler(Filters.text & ~Filters.command, receive_query)],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
 
-    conv_handler_2 = ConversationHandler(
-        entry_points=[CommandHandler('chat', test_command)],
-        states={
-            query_state: [
-                MessageHandler(Filters.text & ~Filters.command, receive_query),
-                CommandHandler('cancel', cancel)
-            ]
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
 
 
     ### Routing
 
 
     dispatcher.add_handler(conv_handler)
-    dispatcher.add_handler(conv_handler_2)
+    # dispatcher.add_handler(conv_handler_2)
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler("ticket", send_ticket))
     dispatcher.add_handler(CommandHandler('help', help))
