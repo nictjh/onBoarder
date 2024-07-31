@@ -485,33 +485,21 @@ def generate_response_def_with_openai(entry, user_query):
     data = supabase.table('dictionary').select('*').eq('id', entry).execute()
     print("This is the data to be returned to gpt", data)
     item = data.data[0]
-    # context = f"""
-    #     Definition: {item['definition']}
-    #     Explanation: {item['explanation']}
-    #     Additional resources: {item['additional_resources']}
-    # """
+
 
     if item['term'].lower() not in user_query.lower():
-        return f"Sorry, the term '{user_query}' does not exist in my database."
+        return f"Sorry, the term in '{user_query}' does not exist in my database."
 
-    context = {
-        "definition": item['definition'],
-        "explanation": item['explanation'],
-        "additional_resources": item['additional_resources']
-    }
-
-    # Construct the context string for the relevant term found
-    context_message = f"""
-        Definition: {context['definition']}
-        Explanation: {context['explanation']}
-        Additional resources: {context['additional_resources']}
+    context = f"""
+        Definition: {item['definition']}
+        Explanation: {item['explanation']}
+        Additional resources: {item['additional_resources']}
     """
-
     system_message = {
         "role": "system",
         "content": """
             You are a knowledgeable chatbot assistant.
-            Answer strictly with only the context provided.
+            Answer strictly with only the context provided above.
             If explanation is not available, provide the most appropriate and notify that it may not be accurate.
             Do not invent answers when none is available; Respond with 'I am not trained to answer that qeustion'.
             Respond naturally using the provided definitions, explanations and additional_resources.
@@ -533,7 +521,7 @@ def generate_response_def_with_openai(entry, user_query):
                 },
                 {
                     "role": "system",
-                    "content": context_message
+                    "content": context
                 }
             ],
             temperature=1,
