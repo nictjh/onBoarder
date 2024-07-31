@@ -23,7 +23,8 @@ url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 # Establishing supabase client
 supabase = create_client(url, key)
-OPEN_AI_TOKEN = os.getenv("OPEN_AI_CAG")
+# OPEN_AI_TOKEN = os.getenv("OPEN_AI_CAG")
+OPEN_AI_TOKEN = os.getenv("OPEN_AI")
 openai.api_key = OPEN_AI_TOKEN
 query_state = 2 ## This for the openai chat
 
@@ -587,6 +588,7 @@ def main() -> None:
     # Start the Bot (Test DB connection first)
     if test_database_connection("dictionary"):
         print("Database connection success!, starting bot")
+        # print(OPEN_AI_TOKEN)
         updater.start_polling()
         updater.idle()
     else:
