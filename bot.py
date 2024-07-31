@@ -487,10 +487,11 @@ def generate_response_def_with_openai(entry, user_query):
     item = data.data[0]
 
 
-    if item['term'].lower() not in user_query.lower():
-        return f"Sorry, the term in '{user_query}' does not exist in my database."
+    # if item['term'].lower() not in user_query.lower():
+    #     return f"Sorry, the term in '{user_query}' does not exist in my database. The closest term is {item['term']}, do prompt about that if you want to know more information."
 
     context = f"""
+        Term: {item['term']}
         Definition: {item['definition']}
         Explanation: {item['explanation']}
         Additional resources: {item['additional_resources']}
@@ -500,9 +501,10 @@ def generate_response_def_with_openai(entry, user_query):
         "content": """
             You are a knowledgeable chatbot assistant.
             Answer strictly with only the context provided above.
+            If the user query does not match the term in context, suggest the term given in the context to them instead.
             If explanation is not available, provide the most appropriate and notify that it may not be accurate.
-            Do not invent answers when none is available; Respond with 'I am not trained to answer that qeustion'.
-            Respond naturally using the provided definitions, explanations and additional_resources.
+            Respond naturally using the provided definition, explanation and additional resources.
+            Be as detailed as possible in your answers.
             Use examples where relevant and available.
             Recognize synonyms as the term they represent.
             Always clarify ambigious or incomplete queries.
