@@ -497,10 +497,6 @@ def generate_response_def_with_openai(entry, user_query):
         "additional_resources": item['additional_resources']
     }
 
-    # Check if the query term is directly present in the data
-    if user_query.lower() not in item['term'].lower():
-        return f"Sorry, I couldn't find information on '{user_query}'. Perhaps you meant '{item['term']}'?"
-
     # Construct the context string for the relevant term found
     context_message = f"""
         Definition: {context['definition']}
@@ -513,11 +509,12 @@ def generate_response_def_with_openai(entry, user_query):
         "content": """
             You are a knowledgeable chatbot assistant.
             Answer strictly with only the context provided above.
-            Do not invent answers when none is available; respond with 'I do not have that information in my database' if the information is not found in the context.
-            If an explanation is not available, provide the closest match and notify that it may not be accurate.
+            If explanation is not available, provide the most appropriate and notify that it may not be accurate.
+            Do not invent answers when none is available; Respond with 'I am not trained to answer that qeustion'.
+            Respond naturally using the provided definitions, explanations and additional_resources.
             Use examples where relevant and available.
             Recognize synonyms as the term they represent.
-            Clarify ambiguous or incomplete queries with the user.
+            Always clarify ambigious or incomplete queries.
             End the response with "/cancel to stop chatting with me, have a nice day!".
         """
     }
