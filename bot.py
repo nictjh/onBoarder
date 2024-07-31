@@ -501,7 +501,7 @@ def generate_response_def_with_openai(entry, user_query):
         "content": """
             You are a knowledgeable chatbot assistant.
             Answer strictly with only the context provided above.
-            If the user query does not match the term in context, suggest the term given in the context to them instead.
+            If the user query does not match the term in context, give an appropriate explanation to your knowledge and notify that it may not be accurate.
             If explanation is not available, provide the most appropriate and notify that it may not be accurate.
             Respond naturally using the provided definition, explanation and additional resources.
             Be as detailed as possible in your answers.
