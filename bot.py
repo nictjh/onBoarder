@@ -485,11 +485,29 @@ def generate_response_def_with_openai(entry, user_query):
     data = supabase.table('dictionary').select('*').eq('id', entry).execute()
     print("This is the data to be returned to gpt", data)
     item = data.data[0]
-    context = f"""
-        Definition: {item['definition']}
-        Explanation: {item['explanation']}
-        Additional resources: {item['additional_resources']}
+    # context = f"""
+    #     Definition: {item['definition']}
+    #     Explanation: {item['explanation']}
+    #     Additional resources: {item['additional_resources']}
+    # """
+
+    context = {
+        "definition": item['definition'],
+        "explanation": item['explanation'],
+        "additional_resources": item['additional_resources']
+    }
+
+    # Check if the query term is directly present in the data
+    if user_query.lower() not in item['term'].lower():
+        return f"Sorry, I couldn't find information on '{user_query}'. Perhaps you meant '{item['term']}'?"
+
+    # Construct the context string for the relevant term found
+    context_message = f"""
+        Definition: {context['definition']}
+        Explanation: {context['explanation']}
+        Additional resources: {context['additional_resources']}
     """
+
     system_message = {
         "role": "system",
         "content": """
@@ -515,7 +533,7 @@ def generate_response_def_with_openai(entry, user_query):
                 },
                 {
                     "role": "system",
-                    "content": context
+                    "content": context_message
                 }
             ],
             temperature=1,
